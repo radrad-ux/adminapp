@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# whenadding a new featuretothe project 
+
+- DO NOT remove any existing functionality already works just add the feature I asked you to add
+- DO NOT use mock data

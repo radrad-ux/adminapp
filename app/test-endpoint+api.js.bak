@@ -1,0 +1,32 @@
+/**
+ * This is a simple test endpoint to verify that Expo Router API functionality is working
+ */
+export function GET(request) {
+  console.log('Test endpoint called with GET');
+  
+  return Response.json({
+    success: true,
+    message: 'Test endpoint is working',
+    timestamp: new Date().toISOString()
+  });
+}
+
+export async function POST(request) {
+  console.log('Test endpoint called with POST');
+  
+  // Parse request body if available
+  let body = {};
+  try {
+    body = await request.json();
+    console.log('Received body:', body);
+  } catch (error) {
+    console.error('Error parsing request body:', error);
+  }
+  
+  return Response.json({
+    success: true,
+    message: 'POST request received successfully',
+    receivedData: body,
+    timestamp: new Date().toISOString()
+  });
+} 

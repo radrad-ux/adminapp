@@ -1,0 +1,211 @@
+import React, { useState, useEffect } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  SafeAreaView,
+} from 'react-native';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { Colors } from '@/constants/Colors';
+import { testApiEndpoints } from '../services/restaurantService';
+
+export default function ApiEndpointTestScreen() {
+  const { colorScheme } = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+  
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState(null);
+  const [error, setError] = useState(null);
+
+  const runTest = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const testResults = await testApiEndpoints();
+      setResults(testResults);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Run test on component mount
+  useEffect(() => {
+    runTest();
+  }, []);
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: colors.text }]}>API Endpoint Test</Text>
+          <Text style={[styles.subtitle, { color: colors.icon }]}>
+            This screen tests the availability of API endpoints
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: colors.primary }]}
+          onPress={runTest}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>
+            {loading ? 'Testing...' : 'Run Test Again'}
+          </Text>
+        </TouchableOpacity>
+
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.text }]}>
+              Testing API endpoints...
+            </Text>
+          </View>
+        )}
+
+        {error && (
+          <View style={[styles.errorContainer, { backgroundColor: colors.error + '20' }]}>
+            <Text style={[styles.errorText, { color: colors.error }]}>
+              Error: {error}
+            </Text>
+          </View>
+        )}
+
+        {results && !loading && (
+          <View style={styles.resultsContainer}>
+            <Text style={[styles.resultsTitle, { color: colors.text }]}>
+              Test Results
+            </Text>
+            
+            {Object.entries(results).map(([endpoint, result]) => (
+              <View 
+                key={endpoint}
+                style={[
+                  styles.endpointCard,
+                  { 
+                    backgroundColor: colors.card,
+                    borderLeftColor: result.success ? '#4CAF50' : '#F44336',
+                  }
+                ]}
+              >
+                <Text style={[styles.endpointName, { color: colors.text }]}>
+                  {endpoint}
+                </Text>
+                
+                <View style={styles.resultRow}>
+                  <Text style={{ color: colors.icon }}>Status:</Text>
+                  <Text 
+                    style={[
+                      styles.statusValue,
+                      { color: result.success ? '#4CAF50' : '#F44336' }
+                    ]}
+                  >
+                    {result.status || 'N/A'}
+                  </Text>
+                </View>
+                
+                {result.success ? (
+                  <View style={styles.resultRow}>
+                    <Text style={{ color: colors.icon }}>Has Data:</Text>
+                    <Text style={{ color: colors.text }}>
+                      {result.hasData ? 'Yes' : 'No'}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.resultRow}>
+                    <Text style={{ color: colors.icon }}>Error:</Text>
+                    <Text style={{ color: '#F44336', flex: 1 }}>
+                      {result.error}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+    padding: 16,
+  },
+  header: {
+    marginBottom: 24,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  button: {
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+  },
+  errorContainer: {
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 24,
+  },
+  errorText: {
+    fontSize: 16,
+  },
+  resultsContainer: {
+    marginBottom: 24,
+  },
+  resultsTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  endpointCard: {
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+  },
+  endpointName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  resultRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  statusValue: {
+    fontWeight: 'bold',
+  },
+}); 

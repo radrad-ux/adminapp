@@ -1,0 +1,26 @@
+import React from 'react';
+import { View, StyleSheet } from 'react-native';
+import LoginTest from '../components/LoginTest';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { Colors } from '@/constants/Colors';
+
+/**
+ * Login Screen
+ * Main authentication screen for the app
+ */
+export default function LoginScreen() {
+  const { colorScheme } = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+  
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <LoginTest />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+}); 

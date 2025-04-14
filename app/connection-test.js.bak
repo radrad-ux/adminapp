@@ -1,0 +1,22 @@
+import React from 'react';
+import { View, StyleSheet } from 'react-native';
+import ConnectionTest from '../components/ConnectionTest';
+
+/**
+ * Connection Test Screen
+ * Standalone screen for testing API connectivity
+ */
+export default function ConnectionTestScreen() {
+  return (
+    <View style={styles.container}>
+      <ConnectionTest />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+}); 

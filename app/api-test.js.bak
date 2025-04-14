@@ -1,0 +1,517 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import apiClient from '../services/api';
+import { StatusBar } from 'expo-status-bar';
+import NetInfo from '@react-native-community/netinfo';
+import { useAuth } from '../context/AuthContext';
+
+// Test endpoints
+const ENDPOINTS = [
+  // First add a local test endpoint
+  { name: 'Local Test', method: 'GET', path: '/test-endpoint', isLocal: true },
+  // Public endpoints (don't require auth)
+  { name: 'Custom Auth', method: 'POST', path: '/custom-auth', payload: { email: 'test@example.com', password: 'password123' }, public: true },
+  { name: 'Validate Token', method: 'GET', path: '/validate-token', public: true },
+  { name: 'Env Check', method: 'GET', path: '/env-check', public: true },
+  // Protected endpoints (require auth)
+  { name: 'Order Status', method: 'GET', path: '/order-status' },
+  { name: 'Restaurant Info', method: 'GET', path: '/restaurant-info' },
+  { name: 'Menu', method: 'GET', path: '/menu' },
+  { name: 'Orders', method: 'GET', path: '/orders' },
+];
+
+export default function ApiTestScreen() {
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [baseUrl, setBaseUrl] = useState(apiClient.defaults.baseURL);
+  const [networkInfo, setNetworkInfo] = useState(null);
+  const { isLoggedIn } = useAuth();
+
+  useEffect(() => {
+    // Check network connectivity on mount
+    checkNetworkStatus();
+  }, []);
+
+  const checkNetworkStatus = async () => {
+    try {
+      const netInfo = await NetInfo.fetch();
+      setNetworkInfo(netInfo);
+      console.log('Network status:', netInfo);
+      
+      if (!netInfo.isConnected) {
+        Alert.alert(
+          'Network Error',
+          'You are currently offline. Please check your internet connection and try again.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error checking network status:', error);
+    }
+  };
+
+  const runTest = async (endpoint) => {
+    console.log(`Starting test for ${endpoint.method} ${endpoint.path}`);
+    
+    // Skip protected endpoints if not logged in (unless local or public)
+    if (!isLoggedIn && !endpoint.isLocal && !endpoint.public) {
+      Alert.alert(
+        'Authentication Required',
+        'You need to be logged in to test this endpoint. Please login first.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      await checkNetworkStatus();
+      if (!networkInfo?.isConnected && !endpoint.isLocal) {
+        throw new Error('No internet connection');
+      }
+
+      console.log(`Making ${endpoint.method} request to ${endpoint.isLocal ? '' : baseUrl}${endpoint.path}`);
+      console.log('Request payload:', endpoint.payload || 'No payload');
+      
+      const startTime = Date.now();
+      let response;
+      
+      if (endpoint.isLocal) {
+        // Handle local endpoint separately
+        const url = endpoint.path;
+        console.log(`Testing local endpoint at ${url}`);
+        
+        if (endpoint.method === 'GET') {
+          response = await fetch(url);
+        } else if (endpoint.method === 'POST') {
+          response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(endpoint.payload || {})
+          });
+        }
+        
+        if (response.ok) {
+          const data = await response.json();
+          response.data = data; // Match axios response format
+        } else {
+          throw new Error(`Local request failed with status ${response.status}`);
+        }
+      } else {
+        // Handle remote API calls with axios
+        if (endpoint.method === 'GET') {
+          response = await apiClient.get(endpoint.path);
+        } else if (endpoint.method === 'POST') {
+          response = await apiClient.post(endpoint.path, endpoint.payload);
+        }
+      }
+      
+      const endTime = Date.now();
+      const latency = endTime - startTime;
+
+      console.log(`Response received for ${endpoint.path}:`, response.status);
+      console.log('Response data:', response.data);
+
+      setResults(prev => [
+        ...prev,
+        {
+          endpoint: endpoint.path,
+          method: endpoint.method,
+          status: response.status,
+          success: true,
+          latency,
+          data: JSON.stringify(response.data).substring(0, 100) + (JSON.stringify(response.data).length > 100 ? '...' : ''),
+          timestamp: new Date().toLocaleTimeString(),
+          isLocal: endpoint.isLocal
+        }
+      ]);
+    } catch (error) {
+      console.error(`Error testing ${endpoint.path}:`, error);
+      console.error('Error details:', error.response || 'No response details');
+      
+      const errorDetails = {
+        endpoint: endpoint.path,
+        method: endpoint.method,
+        status: error.response?.status || 'N/A',
+        success: false,
+        error: error.message,
+        details: error.response?.data ? JSON.stringify(error.response.data).substring(0, 100) : 'No response data',
+        timestamp: new Date().toLocaleTimeString(),
+        isLocal: endpoint.isLocal
+      };
+      
+      console.log('Adding error result:', errorDetails);
+      
+      setResults(prev => [...prev, errorDetails]);
+      
+      // Show error alert for better visibility
+      if (!networkInfo?.isConnected && !endpoint.isLocal) {
+        Alert.alert(
+          'Network Error',
+          'No internet connection. Please check your connection and try again.',
+          [{ text: 'OK' }]
+        );
+      } else if (error.message.includes('Network Error') && !endpoint.isLocal) {
+        Alert.alert(
+          'API Connection Error',
+          `Could not connect to the API server at ${baseUrl}. Please verify the server is running and accessible.`,
+          [{ text: 'OK' }]
+        );
+      } else if (error.message === 'Authentication required for this endpoint') {
+        Alert.alert(
+          'Authentication Required',
+          'You need to be logged in to access this endpoint.',
+          [{ text: 'OK' }]
+        );
+      }
+    } finally {
+      console.log(`Test for ${endpoint.path} completed`);
+      setLoading(false);
+    }
+  };
+
+  const runAllTests = async () => {
+    console.log('Starting ALL tests');
+    setResults([]);
+    setLoading(true);
+    
+    // Check network status before running tests
+    await checkNetworkStatus();
+    if (!networkInfo?.isConnected) {
+      setLoading(false);
+      return;
+    }
+    
+    // Run tests one by one - if not logged in, only run local and public endpoints
+    for (const endpoint of ENDPOINTS) {
+      if (isLoggedIn || endpoint.isLocal || endpoint.public) {
+        console.log(`Running test for ${endpoint.path}...`);
+        await runTest(endpoint);
+      } else {
+        console.log(`Skipping ${endpoint.path} - authentication required`);
+        setResults(prev => [...prev, {
+          endpoint: endpoint.path,
+          method: endpoint.method,
+          status: 'Skipped',
+          success: false,
+          error: 'Authentication required',
+          timestamp: new Date().toLocaleTimeString(),
+          isLocal: endpoint.isLocal
+        }]);
+      }
+    }
+    
+    console.log('All tests completed');
+    setLoading(false);
+  };
+
+  const clearResults = () => {
+    console.log('Clearing results');
+    setResults([]);
+  };
+
+  return (
+    <View style={styles.container}>
+      <StatusBar style="auto" />
+      <Text style={styles.title}>API Connection Test</Text>
+      <Text style={styles.subtitle}>Testing connectivity to: {baseUrl}</Text>
+      
+      <View style={styles.statusContainer}>
+        {networkInfo && (
+          <Text style={[
+            styles.statusText, 
+            { color: networkInfo.isConnected ? '#4CAF50' : '#F44336' }
+          ]}>
+            Network: {networkInfo.isConnected ? 'Connected' : 'Disconnected'} 
+            {networkInfo.type && ` (${networkInfo.type})`}
+          </Text>
+        )}
+        
+        <Text style={[
+          styles.statusText, 
+          { color: isLoggedIn ? '#4CAF50' : '#F44336' }
+        ]}>
+          Auth: {isLoggedIn ? 'Logged In' : 'Not Logged In'}
+        </Text>
+      </View>
+      
+      {!isLoggedIn && (
+        <Text style={styles.warningText}>
+          Note: You are not logged in. Only public endpoints will work.
+        </Text>
+      )}
+      
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity 
+          style={[styles.button, styles.primaryButton]} 
+          onPress={runAllTests}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>Run All Tests</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.button, styles.secondaryButton]} 
+          onPress={clearResults}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>Clear Results</Text>
+        </TouchableOpacity>
+      </View>
+      
+      <View style={styles.endpointContainer}>
+        <Text style={styles.sectionTitle}>Available Endpoints:</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {ENDPOINTS.map((endpoint, index) => (
+            <TouchableOpacity 
+              key={index} 
+              style={[
+                styles.endpointButton, 
+                (!isLoggedIn && !endpoint.isLocal && !endpoint.public) && styles.disabledEndpoint
+              ]}
+              onPress={() => runTest(endpoint)}
+              disabled={loading || (!isLoggedIn && !endpoint.isLocal && !endpoint.public)}
+            >
+              <Text style={styles.endpointMethod}>{endpoint.method}</Text>
+              <Text style={styles.endpointPath}>{endpoint.path}</Text>
+              {(endpoint.isLocal || endpoint.public) && (
+                <View style={styles.endpointBadge}>
+                  <Text style={styles.endpointBadgeText}>
+                    {endpoint.isLocal ? 'Local' : 'Public'}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+      
+      {loading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0066CC" />
+          <Text style={styles.loadingText}>Testing API endpoints...</Text>
+        </View>
+      )}
+      
+      <Text style={styles.resultsTitle}>Test Results:</Text>
+      
+      <ScrollView style={styles.resultsContainer}>
+        {results.length === 0 ? (
+          <Text style={styles.noResults}>No test results yet. Run a test to see results here.</Text>
+        ) : (
+          results.map((result, index) => (
+            <View 
+              key={index} 
+              style={[
+                styles.resultItem,
+                result.success ? styles.successResult : styles.errorResult
+              ]}
+            >
+              <View style={styles.resultHeader}>
+                <Text style={styles.resultMethod}>{result.method}</Text>
+                <Text style={styles.resultEndpoint}>{result.endpoint}</Text>
+                <Text style={styles.resultTime}>{result.timestamp}</Text>
+              </View>
+              
+              <View style={styles.resultDetails}>
+                <Text style={styles.resultStatus}>
+                  Status: {result.status}
+                  {result.latency && ` (${result.latency}ms)`}
+                </Text>
+                
+                {result.success ? (
+                  <Text style={styles.resultData}>Data: {result.data}</Text>
+                ) : (
+                  <>
+                    <Text style={styles.resultError}>Error: {result.error}</Text>
+                    {result.details && <Text style={styles.resultErrorDetails}>Details: {result.details}</Text>}
+                  </>
+                )}
+              </View>
+            </View>
+          ))
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: '#f5f7fa',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 4,
+    color: '#333',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 16,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  warningText: {
+    backgroundColor: '#FFF3CD',
+    color: '#856404',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+  },
+  button: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginRight: 10,
+    elevation: 2,
+  },
+  primaryButton: {
+    backgroundColor: '#0066CC',
+  },
+  secondaryButton: {
+    backgroundColor: '#666',
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  endpointContainer: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#333',
+  },
+  endpointButton: {
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    marginRight: 8,
+    minWidth: 120,
+    elevation: 1,
+  },
+  endpointMethod: {
+    fontWeight: 'bold',
+    color: '#0066CC',
+    marginBottom: 4,
+  },
+  endpointPath: {
+    fontSize: 12,
+    color: '#666',
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#666',
+  },
+  resultsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#333',
+  },
+  resultsContainer: {
+    flex: 1,
+  },
+  noResults: {
+    textAlign: 'center',
+    color: '#999',
+    padding: 40,
+  },
+  resultItem: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    elevation: 1,
+  },
+  successResult: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  errorResult: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#F44336',
+  },
+  resultHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  resultMethod: {
+    fontWeight: 'bold',
+    marginRight: 8,
+    color: '#0066CC',
+  },
+  resultEndpoint: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+  },
+  resultTime: {
+    fontSize: 10,
+    color: '#999',
+    marginTop: 8,
+    textAlign: 'right',
+  },
+  resultStatus: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  resultData: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'monospace',
+  },
+  resultError: {
+    color: '#F44336',
+    marginBottom: 4,
+  },
+  resultErrorDetails: {
+    color: '#F44336',
+    marginBottom: 4,
+  },
+  endpointBadge: {
+    backgroundColor: '#9C27B0',
+    padding: 4,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  endpointBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  disabledEndpoint: {
+    backgroundColor: '#eee',
+  },
+}); 

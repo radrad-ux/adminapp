@@ -1,0 +1,30 @@
+import React from 'react';
+import { View, StyleSheet, ScrollView } from 'react-native';
+import AuthExample from '../components/AuthExample';
+import LoginTest from '../components/LoginTest';
+
+/**
+ * Authentication and Restaurant Info Test Screen
+ */
+export default function AuthTestScreen() {
+  return (
+    <ScrollView style={styles.container}>
+      <View style={styles.section}>
+        <LoginTest />
+      </View>
+      <View style={styles.section}>
+        <AuthExample />
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  section: {
+    marginBottom: 20,
+  }
+}); 

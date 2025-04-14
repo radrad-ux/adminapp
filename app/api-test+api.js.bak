@@ -1,0 +1,38 @@
+/**
+ * API test endpoint to test connectivity to the server
+ */
+export function GET(request) {
+  console.log('API test endpoint called');
+  
+  // Generate response data
+  const responseData = {
+    message: 'API test endpoint is working',
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+  };
+  
+  console.log('API connection test completed', responseData);
+  
+  // Return JSON response
+  return Response.json(responseData);
+}
+
+/**
+ * Handle POST requests to test data submission
+ */
+export async function POST(request) {
+  // Parse the request body
+  const body = await request.json().catch(error => {
+    console.error('Error parsing request body:', error);
+    return {};
+  });
+  
+  console.log('POST data received:', body);
+  
+  // Return a response with the received data
+  return Response.json({
+    message: 'POST request received successfully',
+    receivedData: body,
+    timestamp: new Date().toISOString(),
+  });
+} 
